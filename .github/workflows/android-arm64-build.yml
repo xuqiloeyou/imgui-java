@@ -1,21 +1,31 @@
-# imgui-java 1.86.11 Android ARM64 专属编译脚本（最终修复版）
-name: Android ARM64 Build (Only)
+# imgui-java 1.86.11 Android ARM64 最终稳定编译脚本
+name: Android ARM64 Build (Final)
 on:
-  workflow_dispatch: # 仅手动触发，避免误执行
+  workflow_dispatch:
 
 jobs:
   build-android-arm64:
     runs-on: ubuntu-22.04
     env:
+      # 强制使用Node.js 24，消除弃用警告
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - name: 拉取源码（强制官方1.86.11版本）
+      # 🔧 修复：正确拉取源码，100%确保pom.xml存在
+      - name: 拉取imgui-java 1.86.11源码
         uses: actions/checkout@v4
         with:
+          # 直接克隆官方仓库，彻底解决Fork/权限问题
           repository: SpaiR/imgui-java
           ref: v1.86.11
           submodules: recursive
           fetch-depth: 0
+          persist-credentials: false
+
+      # 验证源码拉取成功（排查用，可保留）
+      - name: 验证项目文件
+        run: |
+          ls -la
+          cat pom.xml | head -20
 
       - name: 配置JDK 17
         uses: actions/setup-java@v4
@@ -34,11 +44,11 @@ jobs:
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
           echo "TARGET_ARCH=arm64-v8a" >> $GITHUB_ENV
-          echo "ANDROID_API=34" >> $GITHUB_ENV # 用34更稳定，兼容绝大多数Android设备
+          echo "ANDROID_API=34" >> $GITHUB_ENV
           echo "TOOLCHAIN=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
           echo "TARGET_TRIPLE=aarch64-linux-android" >> $GITHUB_ENV
 
-      - name: 配置CMake（仅Android ARM64，彻底屏蔽桌面端）
+      - name: 配置CMake（仅Android ARM64）
         run: |
           rm -rf build-android-arm64 && mkdir -p build-android-arm64
           cd build-android-arm64
@@ -55,7 +65,7 @@ jobs:
             -DIMGUI_JAVA_BUILD_EXAMPLES=OFF \
             -DIMGUI_JAVA_BUILD_TESTS=OFF \
             -DIMGUI_JAVA_OPENGL_VERSION=GLES3 \
-            -DIMGUI_JAVA_BUILD_DESKTOP=OFF # 关键！彻底关闭桌面端所有编译任务
+            -DIMGUI_JAVA_BUILD_DESKTOP=OFF
 
       - name: 编译Android ARM64原生库
         run: |
@@ -64,12 +74,9 @@ jobs:
 
       - name: 重命名并打包产物
         run: |
-          # 重命名为veil模组可识别的文件名
           cp build-android-arm64/libimgui-java.so build-android-arm64/libimgui-java-arm64.so
-          # 创建标准Android目录结构
-          mkdir -p release/arm64-v8aarm64-v8a
+          mkdir -p release/arm64-v8a
           cp build-android-arm64/libimgui-java-arm64.so release/arm64-v8a/
-          # 验证文件生成
           ls -la release/arm64-v8a/
 
       - name: 上传Android专属编译产物
