@@ -1,0 +1,77 @@
+# imgui-java 1.86.11 Android ARM64 (aarch64) 编译脚本
+# 适配Android API36、ARM64-v8a，输出libimgui-java-arm64.so
+name: Android ARM64 Build
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # 手动触发编译（推荐）
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04 # 稳定编译环境，内置全套工具
+    steps:
+      - name: 拉取源码
+        uses: actions/checkout@v4
+        with:
+          ref: v1.86.11 # 固定编译1.86.11版本，匹配veil模组依赖
+          submodules: true # 拉取imgui子模块，必须开启
+
+      - name: 配置JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: 配置Android NDK r25b
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25b # 兼容Android API36，最稳定版本
+          add-to-path: true
+
+      - name: 定义编译环境变量
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
+          echo "TARGET_ARCH=arm64-v8a" >> $GITHUB_ENV
+          echo "ANDROID_API=36" >> $GITHUB_ENV
+          echo "TOOLCHAIN=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
+          echo "TARGET_TRIPLE=aarch64-linux-android" >> $GITHUB_ENV
+
+      - name: 配置CMake编译参数
+        run: |
+          mkdir -p build-android-arm64
+          cd build-android-arm64
+          cmake .. \
+            -DCMAKE_SYSTEM_NAME=Android \
+            -DCMAKE_SYSTEM_VERSION=${{ env.ANDROID_API }} \
+            -DCMAKE_ANDROID_ARCH_ABI=${{ env.TARGET_ARCH }} \
+            -DCMAKE_ANDROID_NDK=${{ env.ANDROID_NDK_HOME }} \
+            -DCMAKE_ANDROID_STL_TYPE=c++_static \
+            -DCMAKE_C_COMPILER=${{ env.TOOLCHAIN }}/bin/${{ env.TARGET_TRIPLE }}${{ env.ANDROID_API }}-clang \
+            -DCMAKE_CXX_COMPILER=${{ env.TOOLCHAIN }}/bin/${{ env.TARGET_TRIPLE }}${{ env.ANDROID_API }}-clang++ \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DIMGUI_JAVA_BUILD_EXAMPLES=OFF \ # 关闭示例，仅编译核心库
+            -DIMGUI_JAVA_BUILD_TESTS=OFF \    # 关闭测试，加快编译
+            -DIMGUI_JAVA_OPENGL_VERSION=GLES3 # 匹配游戏GLES3渲染器，关键！
+
+      - name: 编译原生库（so文件）
+        run: |
+          cd build-android-arm64
+          make -j$(nproc) # 多线程编译，加快速度
+
+      - name: 重命名so文件（匹配veil加载规范）
+        run: |
+          cp build-android-arm64/libimgui-java.so build-android-arm64/libimgui-java-arm64.so
+          mkdir -p release/arm64-v8a
+          cp build-android-arm64/libimgui-java-arm64.so release/arm64-v8a/
+
+      - name: 上传编译产物（可直接下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: imgui-java-1.86.11-android-arm64
+          path: |
+            release/
+            build-android-arm64/libimgui-java-arm64.so
