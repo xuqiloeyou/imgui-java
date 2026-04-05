@@ -1,22 +1,25 @@
-# imgui-java 1.86.11 Android ARM64 (aarch64) 编译脚本
-# 适配Android API36、ARM64-v8a，输出libimgui-java-arm64.so
+# imgui-java 1.86.11 Android ARM64 (aarch64) 编译脚本（修复版）
 name: Android ARM64 Build
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # 手动触发编译（推荐）
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # 稳定编译环境，内置全套工具
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # 消除Node.js 20弃用警告
     steps:
-      - name: 拉取源码
+      - name: 拉取源码（修复版）
         uses: actions/checkout@v4
         with:
-          ref: v1.86.11 # 固定编译1.86.11版本，匹配veil模组依赖
-          submodules: true # 拉取imgui子模块，必须开启
+          repository: SpaiR/imgui-java
+          ref: v1.86.11
+          submodules: recursive
+          fetch-depth: 0
 
       - name: 配置JDK 17
         uses: actions/setup-java@v4
@@ -28,7 +31,7 @@ jobs:
       - name: 配置Android NDK r25b
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r25b # 兼容Android API36，最稳定版本
+          ndk-version: r25b
           add-to-path: true
 
       - name: 定义编译环境变量
@@ -53,14 +56,14 @@ jobs:
             -DCMAKE_CXX_COMPILER=${{ env.TOOLCHAIN }}/bin/${{ env.TARGET_TRIPLE }}${{ env.ANDROID_API }}-clang++ \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS=ON \
-            -DIMGUI_JAVA_BUILD_EXAMPLES=OFF \ # 关闭示例，仅编译核心库
-            -DIMGUI_JAVA_BUILD_TESTS=OFF \    # 关闭测试，加快编译
-            -DIMGUI_JAVA_OPENGL_VERSION=GLES3 # 匹配游戏GLES3渲染器，关键！
+            -DIMGUI_JAVA_BUILD_EXAMPLES=OFF \
+            -DIMGUI_JAVA_BUILD_TESTS=OFF \
+            -DIMGUI_JAVA_OPENGL_VERSION=GLES3
 
       - name: 编译原生库（so文件）
         run: |
           cd build-android-arm64
-          make -j$(nproc) # 多线程编译，加快速度
+          make -j$(nproc)
 
       - name: 重命名so文件（匹配veil加载规范）
         run: |
@@ -68,7 +71,7 @@ jobs:
           mkdir -p release/arm64-v8a
           cp build-android-arm64/libimgui-java-arm64.so release/arm64-v8a/
 
-      - name: 上传编译产物（可直接下载）
+      - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:
           name: imgui-java-1.86.11-android-arm64
